@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
     //creatinhg fields
-    fullname: {
+    fullName: {
         type: String,
         required: true
     },

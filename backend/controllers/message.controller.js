@@ -1,42 +1,45 @@
 import Conversation from "../models/conversation.model.js";
 import Message from "../models/message.model.js";
+import { getReceiverSocketId, io } from "../socket/socket.js";
 
 export const sendMessage = async(req, res) => {
     try {
-        const { message } = req.body;
-        const { id:receiverId } = req.params;
-        const senderId = req.user._id;
-        
-        //to find the conversation between sender and receiver
-        let conversation=await Conversation.findOne({
-            participants: { $all: [senderId, receiverId] },
-            
-        })
-        //creating a conversation between this two users
-        if (!conversation) {
-            conversation = await Conversation.create({
-                participants: [senderId, receiverId],
-            });
-        }
-        const newMessage = new Message({
-            senderId,
-            receiverId,
-            message
+      const { message } = req.body;
+      const { id: receiverId } = req.params;
+      const senderId = req.user._id;
+
+      //to find the conversation between sender and receiver
+      let conversation = await Conversation.findOne({
+        participants: { $all: [senderId, receiverId] },
+      });
+      //creating a conversation between this two users
+      if (!conversation) {
+        conversation = await Conversation.create({
+          participants: [senderId, receiverId],
         });
-        if (newMessage) {
-            conversation.messages.push(newMessage._id);
-        }
+      }
+      const newMessage = new Message({
+        senderId,
+        receiverId,
+        message,
+      });
+      if (newMessage) {
+        conversation.messages.push(newMessage._id);
+      }
+
+      // await conversation.save();
+      // await newMessage.save();
+      //instead combining both using promise in this both will run in parallel
+      await Promise.all([conversation.save(), newMessage.save()]);
+
         //Socket.io functionality for real time
+        const receiverSocketId = getReceiverSocketId(receiverId);
+        if (receiverSocketId) {
+          // io.to(<socket_id>).emit() used to send events to specific client
+          io.to(receiverSocketId).emit("newMessage", newMessage);
+        }
 
-
-        // await conversation.save();
-        // await newMessage.save();
-        //instead combining both using promise in this both will run in parallel
-        await Promise.all([conversation.save(), newMessage.save()]);
-
-        res.status(200).json(newMessage);
-        
-        
+      res.status(200).json(newMessage);
     } catch (error) {
       //console logging a error message
       console.log("Error in sendMessage controller", error.message);
